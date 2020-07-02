@@ -50,16 +50,16 @@ class SpSession:
         else:
             # If not a custom context then use the spLite.AuthContext to authenticate
             self.context = auth.AuthContext(
-                self.site, 
-                self.username, 
-                self.__password, 
+                self.site,
+                self.username,
+                self.__password,
                 self.context_type
             ).get_auth()
-        
+
         # Unpack authorization context for authentication
         self.session = requests.Session()
         self.session.headers.update(
-            {'Content-Type': 'application/json; odata=verbose', 
+            {'Content-Type': 'application/json; odata=verbose',
              'accept': 'application/json;odata=verbose'}
         )
 
@@ -71,28 +71,30 @@ class SpSession:
 
     def retry_loop(self, req, max_tries = 5,  data=None, headers=None):
         ''' Takes in a request object and will retry the request
-            upon failure up the the specified number of maximum 
+            upon failure up the the specified number of maximum
             retries.
-            
-            Used because error codes occasionally surface even though the 
-            REST API call is formatted correctly. Exception returns status code 
-            and text. Success returns request object. 
+
+            Used because error codes occasionally surface even though the
+            REST API call is formatted correctly. Exception returns status code
+            and text. Success returns request object.
 
             Default method is get - can retry post methods as well
-            
+
             Default max_tries = 5
         '''
-         
-         
+
         # Call fails sometimes - allow 5 retries
         counter = 0
-        
+
         # Initialize loop
         while True:
-            
-            # Return request object on success
-            if req.status_code == 200:
+
+            # Return request object on any success
+            if req.status_code >= 200 and req.status_code < 300:
                 return req
+            # 404 is very consistent and does not benefit from retrying
+            elif req.status_code == 404:
+                raise FailedConnection(f"Failed to connect. \nError code = {req.status_code}\nError text: {req.text}")
 
             # If limit reached then raise exception
             counter += 1
@@ -109,7 +111,7 @@ class SpSession:
 
             # Spacing out the requests in case of a connection problem
             time.sleep(1)
-            
+
             # Repeat request
             try:
                 if req.request.method == 'GET':
@@ -120,7 +122,7 @@ class SpSession:
                 self.logger.warning('Connection error - Trying again...')
 
     def get_file(self, folder, file, output_location=None):
-        ''' Extract a file from a sharepoint folder and 
+        ''' Extract a file from a sharepoint folder and
             output the contents
             Returns a tuple:
                 (Return code, File - None if output location is provided)
@@ -130,10 +132,10 @@ class SpSession:
 
         # Make the call
         try:
-            
+
             r = self.retry_loop(self.session.get(rest_call))
-                
-            # If output location was provided then 
+
+            # If output location was provided then
             if r.status_code == 200:
                 self.logger.info(f'Downloaded file {folder}/{file}')
                 # If output location is none, then return the string as a file like object
@@ -148,23 +150,21 @@ class SpSession:
                     return r
                 except Exception as e:
                     self.logger.error(f'Failed to write file: {e}')
-                    return 
-                
+                    return
+
         # Catch connections issues
         except FailedConnection as e:
             self.logger.error(e)
-            return 
+            return
 
-    def list_and_get_files(self, folder, output_location=None, files=None, extensions=None):
-        ''' Generator expression to gather the file list from SharePoint. 
-            Each of the files are downloaded and output to the output folder
-            If no file list or extension provided, all are downloaded. 
-            Cannot specifyh both files and extension
-            
-            Yield the return value of GetFile
+    def list_files(self, folder, files=None, extensions=None):
+        ''' Gathers the file list from SharePoint.
+            If no file list or extension provided, all are returned.
+            Cannot specify both files and extension
+
+            Return the list of files in the folder
             Error raised for failed connection
         '''
-
         if isinstance(extensions, str):
             extensions = [extensions]
         elif extensions and not isinstance(extensions, (list, tuple, set, None)):
@@ -178,27 +178,27 @@ class SpSession:
 
         # Build REST call
         rest_call = f"{self.site}/_api/web/GetFolderByServerRelativeUrl('{quote(folder)}')/Files"
-        
+
         # Make the rest call
         try:
             r = self.retry_loop(self.session.get(rest_call))
         except FailedConnection as e:
             self.logger.error(e)
-            return
-        
+            return []
+
         # Gather the file list
         file_list = [file['Name'] for file in r.json()['d']['results']]
 
-        # If a list of files was provided then filter it. 
+        # If a list of files was provided then filter it.
         if files:
             file_list = list(set(file_list) & set(files))
-        
-        # Report if files don't exist
-        dne = [f for f in files if f not in file_list]
 
-        for f in dne:
-            logging.warning(f'File {f} does not exist in folder {folder}')
- 
+            # Report if files don't exist
+            dne = [f for f in files if f not in file_list]
+
+            for f in dne:
+                logging.warning(f'File {f} does not exist in folder {folder}')
+
         # If extensions were provided then filter it
         if extensions:
             # Create a new container for the filtered list
@@ -209,21 +209,33 @@ class SpSession:
 
                 # Pick off files with the specified extension and append
                 filtered_list += [x for x in file_list if x[-len(ext):] == ext]
-            
+
             # Reset the file list
             file_list = filtered_list
-        
-        # Yield the result to capture in result tuple
-        self.logger.info(f'File list to download: {file_list}')
-        yield file_list
-        
+
+        self.logger.info(f'File list: {file_list}')
+        return file_list
+
+
+    def list_and_get_files(self, folder, output_location=None, files=None, extensions=None):
+        ''' Generator expression to gather the file list from SharePoint.
+            Each of the files are downloaded and output to the output folder
+            If no file list or extension provided, all are downloaded.
+            Cannot specify both files and extension
+
+            Yield the return value of GetFile
+            Error raised for failed connection
+        '''
+        file_list = self.list_files( folder, files, extensions )
+
         # Iterate the returned list and write the files
         for file in file_list:
-            self.logger.warning(file)
+            self.logger.info(f"Getting {file}")
             yield self.get_file(folder,file, output_location=output_location)
 
+
     def upload_file(self, folder, file, data=None, overwrite=True):
-        ''' Upload a file to a specified sharepoint folder. 
+        ''' Upload a file to a specified sharepoint folder.
             Default behaivor is to overwrite, but overwrite protection can
             be turned off by switching overwrite to false
         '''
@@ -232,7 +244,7 @@ class SpSession:
         if not isinstance(overwrite, (bool, str)):
             raise ValueError('overwrite must be instance of bool')
 
-        # If a data object was provided, read it. 
+        # If a data object was provided, read it.
         if hasattr(data, 'read'):
             payload = data.read()
             filename = file
@@ -268,3 +280,33 @@ class SpSession:
 
         return r
 
+    def create_folders(self, folder):
+        ''' Creates the given folder and all parent folders if they do not exist. '''
+        parent = os.path.dirname(folder)
+        if parent:
+            self.create_folders(parent)
+        return self.create_folder(folder)
+
+    def create_folder(self, folder):
+        ''' Create a sharepoint folder. The parent folder must exist for this to succeed. '''
+
+        # build the rest call
+        rest_call = f"{self.site}/_api/web/folders"
+
+        # Send a post request to the API contextinfo to get the digest back
+        if not self.digest:
+            r = self.session.post(self.site + "/_api/contextinfo", data="")
+
+            # Extract the digest value from the return content
+            self.digest = r.json()['d']['GetContextWebInformation']['FormDigestValue']
+
+        # Create the payload
+        data = {'__metadata' : {'type' : 'SP.Folder'}, 'ServerRelativeUrl' : folder}
+        payload = json.dumps(data).encode('utf_8')
+
+        # Update the header with the digest
+        opts = {'data': payload, 'headers': {'x-requestdigest' :self.digest}}
+        self.logger.info(f"Creating folder {folder}")
+        r = self.retry_loop(self.session.post(rest_call, **opts), **opts)
+
+        return r
