@@ -69,7 +69,7 @@ class SpSession:
         if self.context.get('headers', None):
             self.session.headers.update(self.context.get('headers'))
 
-    def retry_loop(self, req, max_tries = 5,  data=None, headers=None):
+    def retry_loop(self, req, max_tries=10,  data=None, headers=None):
         ''' Takes in a request object and will retry the request
             upon failure up the the specified number of maximum
             retries.
@@ -83,7 +83,7 @@ class SpSession:
             Default max_tries = 5
         '''
 
-        # Call fails sometimes - allow 5 retries
+        # Call fails sometimes - allow a number of retries
         counter = 0
 
         # Initialize loop
@@ -92,9 +92,6 @@ class SpSession:
             # Return request object on any success
             if req.status_code >= 200 and req.status_code < 300:
                 return req
-            # 404 is very consistent and does not benefit from retrying
-            elif req.status_code == 404:
-                raise FailedConnection(f"Failed to connect. \nError code = {req.status_code}\nError text: {req.text}")
 
             # If limit reached then raise exception
             counter += 1
