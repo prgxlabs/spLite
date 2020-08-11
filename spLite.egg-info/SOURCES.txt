@@ -1,0 +1,11 @@
+README.md
+setup.py
+spLite/SAML.xml
+spLite/__init__.py
+spLite/auth.py
+spLite/sharepoint.py
+spLite.egg-info/PKG-INFO
+spLite.egg-info/SOURCES.txt
+spLite.egg-info/dependency_links.txt
+spLite.egg-info/requires.txt
+spLite.egg-info/top_level.txt

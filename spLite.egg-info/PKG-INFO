@@ -1,0 +1,17 @@
+Metadata-Version: 2.1
+Name: spLite
+Version: 0.0.4
+Summary: A lightweight Python module to interface with the SharePoint REST API for the basic function of uploading and downloading files
+Home-page: https://github.com/mstackhouse/spLite
+Author: Michael Stackhouse
+Author-email: michaelstackhouse0614@gmail.com
+License: UNKNOWN
+Description: # spLite
+        A lightweight Python module to interface with the SharePoint REST API for the basic function of uploading and downloading files. 
+        
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
