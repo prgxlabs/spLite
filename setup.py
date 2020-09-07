@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="spLite",
-    version="0.0.5",
+    version="0.0.6",
     author="Michael Stackhouse",
     author_email="michaelstackhouse0614@gmail.com",
     description="A lightweight Python module to interface with the SharePoint REST API for the basic function of uploading and downloading files",
