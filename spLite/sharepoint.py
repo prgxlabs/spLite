@@ -124,8 +124,11 @@ class SpSession:
             Returns a tuple:
                 (Return code, File - None if output location is provided)
         '''
+        # Sharepoint requires filenames to have single quotes double (even when URL-encoded!)
+        coerced_file = file.replace( "'", "''" )
+
         # Build REST call
-        rest_call = f"{self.site}/_api/web/GetFolderByServerRelativeUrl('{quote(folder)}')/Files('{quote(file)}')/$value"
+        rest_call = f"{self.site}/_api/web/GetFolderByServerRelativeUrl('{quote(folder)}')/Files('{quote(coerced_file)}')/$value"
 
         # Make the call
         try:
@@ -259,9 +262,12 @@ class SpSession:
             else:
                 raise FileNotFoundError(f'File {file} does not exist')
 
+        # Sharepoint requires filenames to have single quotes double (even when URL-encoded!)
+        coerced_file = filename.replace( "'", "''" )
+
         # build the rest call
         rest_call = f"{self.site}/_api/web/GetFolderByServerRelativeUrl('{quote(folder)}')" +\
-                    f"/Files/add(url='{quote(filename)}', overwrite={str(overwrite).lower()})"
+                    f"/Files/add(url='{quote(coerced_file)}', overwrite={str(overwrite).lower()})"
 
         # Send a post request to the API contextinfo to get the digest back
         if not self.digest:
